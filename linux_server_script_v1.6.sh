@@ -97,6 +97,7 @@ echo "$location File Not Found."
 fi
 }
 
+# U-01 root 계정 원격 접속 제한
 function U-1(){
 #--START(점검항목 설명)
 CODE="U-01"
@@ -104,52 +105,131 @@ MEASURES="Hot-Fix"
 #--END
 
 #--START(점검 명령어)
-sectty=`cat /etc/pam.d/login | grep -v "#" | grep pam_securetty.so | wc -l`
-pts=`cat /etc/securetty | grep ^pts | wc -l`
+pts=`cat /etc/securetty | grep -v "#" | grep pts | wc -l`
 
-b_result11=`netstat -ntlp | grep -w 23`
-if [ $pts -eq 0 -a $sectty -eq 1 ];then
+if [ $pts -eq 0 ];then
   a_result1="O"
-  b_result12=`cat /etc/securetty | grep ^pts`
-  b_result13=`cat /etc/pam.d/login | grep -v "#" | grep pam_securetty.so`
-  c_result1="pts 설정이 없고, pam_securetty.so 모듈을 사용중이므로 양호"
+  b_result1=`cat /etc/securetty | grep -v "#" | grep pts`
+  c_result1="/etc/securetty 파일 내 pts/x 관련 설정이 존재하지 않아 telnet 접속 시 root 계정의 직접 접속이 차단되어 있으므로 양호"
 else
   a_result1="X"
-  b_result12=`cat /etc/securetty | grep ^pts`
-  b_result13=`cat /etc/pam.d/login | grep -v "#" | grep pam_securetty.so`
-  c_result1="pts 설정과 pam_securetty.so 모듈 설정을 모두 만족하지 않으므로 취약"
+  b_result1=`cat /etc/securetty | grep -v "#" | grep pts`
+  c_result1="/etc/securetty 파일 내 pts/x 관련 설정이 존재하여 telnet 접속 시 root 계정의 직접 접속이 허용되어 있으므로 취약"
 fi
 
-usessh=`netstat -ntlp | grep ssh | wc -l`
-rtlogin=`cat /etc/ssh/sshd_config | egrep ^PermitRootLogin | awk {'print $2'}`
-rootlogin=`echo $rtlogin | tr ['A-Z'] ['a-z']`
+prlopt=`cat /etc/ssh/sshd_config | grep -v "#" | grep -i PermitRootLogin`
+prlcut=`echo $prlopt | awk {'print $2'}`
+prlval=`echo $prlcut | tr ['A-Z'] ['a-z']`
 authcmd=`cat /root/.ssh/authorized_keys | grep command | wc -l`
+paopt=`cat /etc/ssh/sshd_config | grep -v "#" | grep -i PasswordAuthentication`
+pacut=`echo $paopt | awk {'print $2'}`
+paval=`echo $pacut | tr ['A-Z'] ['a-z']`
+rootpw=`cat /etc/shadow | grep '\''$' | grep -w root | wc -l`
+prpw=`cat /etc/shadow | grep '\''$' | grep -w root`
 
-if [ $usessh -gt 0 ]; then
-  b_result21=`netstat -ntlp | grep ssh`
-  if [ "$rootlogin" ]; then
-    if [ "$rootlogin" == "prohibit-password" ]; then
-      if [ $authcmd -eq 1 ]; then
+if [[ "$prlval" == "yes" ]]; then
+  #statements
+  if [[ "$paval" == "no" ]]; then
+    #statements
+    if [[ $authcmd -eq 1 ]]; then
+      #statements
+      a_result2="O"
+      b_result2=`sed s/\'//g /root/.ssh/authorized_keys`
+      c_result2="/etc/ssh/sshd_config 파일 내 PermitRootLogin yes, PasswordAuthentication no 설정되어 있고, /root/.ssh/authorized_keys 파일 내 command 설정이 존재하여 ssh 접속 시 root 계정의 직접 접속이 차단되어 있으므로 양호"
+    else
+      a_result2="X"
+      b_result2=`sed s/\'//g /root/.ssh/authorized_keys`
+      c_result2="/etc/ssh/sshd_config 파일 내 PermitRootLogin yes, PasswordAuthentication no 설정되어 있고, /root/.ssh/authorized_keys 파일 내 command 설정이 존재하지 않아 ssh 접속 시 root 계정의 직접 접속이 차단되지 않으므로 취약"
+    fi
+
+  else
+    if [[ $rootpw -gt 0 ]]; then
+      #statements
+      a_result2="X"
+      c_result2="/etc/ssh/sshd_config 파일 내 PermitRootLogin yes, PasswordAuthentication yes 설정되어 있고, root 계정에 패스워드가 설정되어 있어 ssh 접속 시 root 계정의 직접 접속이 차단되지 않으므로 취약"
+    else
+      if [[ $authcmd -eq 1 ]]; then
+        #statements
         a_result2="O"
-        c_result2="SSH를 사용중이며 PermitRootLogin 옵션이 $rootlogin로 설정되어있고 /root/.ssh/authorized_keys 파일의 디폴트 커맨드가 존재하므로 양호"
-        b_result22=`sed s/\'//g /root/.ssh/authorized_keys`
+        b_result2=`sed s/\'//g /root/.ssh/authorized_keys`
+        c_result2="/etc/ssh/sshd_config 파일 내 PermitRootLogin yes, PasswordAuthentication yes 설정되어 있고, root 계정에 패스워드가 설정되어 있지 않고, /root/.ssh/authorized_keys 파일 내 command 설정이 존재하여 ssh 접속 시 root 계정의 직접 접속이 차단되어 있으므로 양호"
+
       else
         a_result2="X"
-        c_result2="SSH를 사용중이며 PermitRootLogin 옵션이 $rootlogin로 설정되어있고 /root/.ssh/authorized_keys 파일의 디폴트 커맨드가 존재하지 않으므로 취약"
-        b_result22=`sed s/\'//g /root/.ssh/authorized_keys`
+        b_result2=`sed s/\'//g /root/.ssh/authorized_keys`
+        c_result2="/etc/ssh/sshd_config 파일 내 PermitRootLogin yes, PasswordAuthentication yes 설정되어 있고, root 계정에 패스워드가 설정되어 있지 않지만 /root/.ssh/authorized_keys 파일 내 command 설정이 존재하지 않아 ssh 접속 시 root 계정의 직접 접속이 차단되지 않으므로 취약"
       fi
-    else
-      a_result2="O"
-      c_result2="SSH를 사용중이며 PermitRootLogin 옵션이 $rootlogin로 설정되어있으므로 양호"
     fi
+  fi
+
+elif [[ -z $prlval ]]; then
+  #statements
+  if [[ -f /etc/pam.d/system-auth ]]; then
+    #statements
+    if [[ "$paval" == "no" ]]; then
+      #statements
+      if [[ $authcmd -eq 1 ]]; then
+        #statements
+        a_result2="O"
+        b_result2=`sed s/\'//g /root/.ssh/authorized_keys`
+        c_result2="Redhat 계열 OS의 경우 PermitRootLogin 미설정 시 yes가 기본값이므로 /etc/ssh/sshd_config 파일 내 PermitRootLogin yes, PasswordAuthentication no 설정되어 있고, /root/.ssh/authorized_keys 파일 내 command 설정이 존재하여 ssh 접속 시 root 계정의 직접 접속이 차단되어 있으므로 양호"
+      else
+        a_result2="X"
+        b_result2=`sed s/\'//g /root/.ssh/authorized_keys`
+        c_result2="Redhat 계열 OS의 경우 PermitRootLogin 미설정 시 yes가 기본값이므로 /etc/ssh/sshd_config 파일 내 PermitRootLogin yes, PasswordAuthentication no 설정되어 있고, /root/.ssh/authorized_keys 파일 내 command 설정이 존재하지 않아 ssh 접속 시 root 계정의 직접 접속이 차단되지 않으므로 취약"
+      fi
+
+    else
+      if [[ $rootpw -gt 0 ]]; then
+        #statements
+        a_result2="X"
+        c_result2="Redhat 계열 OS의 경우 PermitRootLogin 미설정 시 yes가 기본값이므로 /etc/ssh/sshd_config 파일 내 PermitRootLogin yes, PasswordAuthentication yes 설정되어 있고, root 계정에 패스워드가 설정되어 있어 ssh 접속 시 root 계정의 직접 접속이 차단되지 않으므로 취약"
+
+      else
+        if [[ $authcmd -eq 1 ]]; then
+          #statements
+          a_result2="O"
+          b_result2=`sed s/\'//g /root/.ssh/authorized_keys`
+          c_result2="Redhat 계열 OS의 경우 PermitRootLogin 미설정 시 yes가 기본값이므로 /etc/ssh/sshd_config 파일 내 PermitRootLogin yes, PasswordAuthentication yes 설정되어 있고, root 계정에 패스워드가 설정되어 있지 않고, /root/.ssh/authorized_keys 파일 내 command 설정이 존재하여 ssh 접속 시 root 계정의 직접 접속이 차단되어 있으므로 양호"
+
+        else
+          a_result2="X"
+          b_result2=`sed s/\'//g /root/.ssh/authorized_keys`
+          c_result2="Redhat 계열 OS의 경우 PermitRootLogin 미설정 시 yes가 기본값이므로 /etc/ssh/sshd_config 파일 내 PermitRootLogin yes, PasswordAuthentication yes 설정되어 있고, root 계정에 패스워드가 설정되어 있지 않지만 /root/.ssh/authorized_keys 파일 내 command 설정이 존재하지 않아 ssh 접속 시 root 계정의 직접 접속이 차단되지 않으므로 취약"
+        fi
+      fi
+    fi
+
+  else
+    if [[ $authcmd -eq 1 ]]; then
+    a_result2="O"
+    b_result2=`sed s/\'//g /root/.ssh/authorized_keys`
+    c_result2="/etc/ssh/sshd_config 파일 내 PermitRootLogin 설정되어 있지 않지만, /root/.ssh/authorized_keys 파일 내 command 설정이 존재하여 ssh 접속 시 root 계정의 직접 접속이 차단되어 있으므로 양호"
+    else
+    a_result2="X"
+    b_result2=`sed s/\'//g /root/.ssh/authorized_keys`
+    c_result2="/etc/ssh/sshd_config 파일 내 PermitRootLogin 설정되어 있지 않고, /root/.ssh/authorized_keys 파일 내 command 설정이 존재하지 않아 ssh 접속 시 root 계정의 직접 접속이 차단되지 않으므로 취약"
+    fi
+  fi
+
+elif [[ "$prlval" == "no" ]] || [[ "$prlval" == "forced-commands-only" ]]; then
+  #statements
+  a_result2="O"
+  c_result2="/etc/ssh/sshd_config 파일 내 PermitRootLogin $prlval 설정되어 있어 ssh 접속 시 root 계정의 직접 접속이 차단되어 있으므로 양호"
+
+elif [[ "$prlval" == "prohibit-password" ]] || [[ "$prlval" == "without-password" ]]; then
+  #statements
+  if [[ $authcmd -eq 1 ]]; then
+    #statements
+    a_result2="O"
+    b_result2=`sed s/\'//g /root/.ssh/authorized_keys`
+    c_result2="/etc/ssh/sshd_config 파일 내 PermitRootLogin $prlval 설정되어 있고, /root/.ssh/authorized_keys 파일 내 command 설정이 존재하여 ssh 접속 시 root 계정의 직접 접속이 차단되어 있으므로 양호"
+
   else
     a_result2="X"
-    c_result2="PermitRootLogin 옵션이 설정되어 있지 않으므로 취약"
+    b_result2=`sed s/\'//g /root/.ssh/authorized_keys`
+    c_result2="/etc/ssh/sshd_config 파일 내 PermitRootLogin $prlval 설정되어 있지만, /root/.ssh/authorized_keys 파일 내 command 설정이 존재하지 않아 ssh 접속 시 root 계정의 직접 접속이 차단되지 않으므로 취약"
   fi
-else
-  a_result2="X"
-  b_result21=`netstat -ntlp | grep ssh`
-  c_result2="SSH를 미사용 중이므로 취약"
 fi
 
 if [ $a_result1 == "O" -a $a_result2 == "O" ]; then
@@ -160,24 +240,32 @@ fi
 #--END
 
 # 명령 출력 #
+usessh=`netstat -napt | grep ssh`
+usetel=`netstat -napt | grep 23`
 
 #--START(점검 방법)
-scriptResult="
-[SSH 원격 접속]
-1.SSH 원격 접속 여부 확인
-$b_result21
-2./etc/ssh/sshd_config 파일 내 PermitRootLogin 설정 확인
-`cat /etc/ssh/sshd_config | grep PermitRootLogin | grep "#"`
-3.PermitRootLogin 옵션이 prohibit-password일 경우 /root/.ssh/authorized_keys 파일 확인
-$b_result22
+scriptResult="[SSH 원격 접속]
+1. SSH 원격 접속 여부 확인
+$usessh
+
+2. /etc/ssh/sshd_config 파일 내 PermitRootLogin 설정 확인
+$prlopt
+
+3. /etc/ssh/sshd_config 파일 내 PasswordAuthentication 설정 확인
+$paopt
+
+4. root 계정 패스워드 설정 확인
+$prpw
+
+5. /root/.ssh/authorized_keys 파일 확인
+$b_result2
 
 [Telnet 원격 접속]
 1.Telnet 원격 접속 여부 확인
-$b_result11
+$usetel
+
 2.securetty 파일내 pts 설정 확인
-$b_result12
-3./etc/pam.d/login 설정 확인
-$b_result13
+$b_result1
 "
 
 chkStatus="$a_result"
