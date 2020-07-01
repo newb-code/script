@@ -104,28 +104,20 @@ MEASURES="Hot-Fix"
 #--END
 
 #--START(점검 명령어)
-
-usetel=`netstat -ntlp | grep -w 23 | wc -l`
 sectty=`cat /etc/pam.d/login | grep -v "#" | grep pam_securetty.so | wc -l`
 pts=`cat /etc/securetty | grep ^pts | wc -l`
 
-if [ $usetel -gt 0 ]; then
-        b_result11=`netstat -ntlp | grep -w 23`
-        if [ $pts -eq 0 -a $sectty -eq 1 ];then
-                a_result1="O"
-                b_result12=`cat /etc/securetty | grep ^pts`
-                b_result13=`cat /etc/pam.d/login | grep -v "#" | grep pam_securetty.so`
-                c_result1="pts 설정이 없고, pam_securetty.so 모듈을 사용중이므로 양호"
-        else
-                a_result1="X"
-                b_result12=`cat /etc/securetty | grep ^pts`
-                b_result13=`cat /etc/pam.d/login | grep -v "#" | grep pam_securetty.so`
-                c_result1="pts 설정과 pam_securetty.so 모듈 설정을 모두 만족하지 않으므로 취약"
-        fi
+b_result11=`netstat -ntlp | grep -w 23`
+if [ $pts -eq 0 -a $sectty -eq 1 ];then
+  a_result1="O"
+  b_result12=`cat /etc/securetty | grep ^pts`
+  b_result13=`cat /etc/pam.d/login | grep -v "#" | grep pam_securetty.so`
+  c_result1="pts 설정이 없고, pam_securetty.so 모듈을 사용중이므로 양호"
 else
-        a_result1="O"
-        b_result11=`netstat -ntlp | grep -w 23`
-        c_result1="텔넷 서비스를 사용하지 않으므로 양호"
+  a_result1="X"
+  b_result12=`cat /etc/securetty | grep ^pts`
+  b_result13=`cat /etc/pam.d/login | grep -v "#" | grep pam_securetty.so`
+  c_result1="pts 설정과 pam_securetty.so 모듈 설정을 모두 만족하지 않으므로 취약"
 fi
 
 usessh=`netstat -ntlp | grep ssh | wc -l`
@@ -134,36 +126,36 @@ rootlogin=`echo $rtlogin | tr ['A-Z'] ['a-z']`
 authcmd=`cat /root/.ssh/authorized_keys | grep command | wc -l`
 
 if [ $usessh -gt 0 ]; then
-        b_result21=`netstat -ntlp | grep ssh`
-        if [ "$rootlogin" ]; then
-                if [ "$rootlogin" == "prohibit-password" ]; then
-                        if [ $authcmd -eq 1 ]; then
-                                a_result2="O"
-                                c_result2="SSH를 사용중이며 PermitRootLogin 옵션이 $rootlogin로 설정되어있고 /root/.ssh/authorized_keys 파일의 디폴트 커맨드가 존재하므로 양호"
-                                b_result22=`sed s/\'//g /root/.ssh/authorized_keys`
-                        else
-                                a_result2="X"
-                                c_result2="SSH를 사용중이며 PermitRootLogin 옵션이 $rootlogin로 설정되어있고 /root/.ssh/authorized_keys 파일의 디폴트 커맨드가 존재하지 않으므로 취약"
-                                b_result22=`sed s/\'//g /root/.ssh/authorized_keys`
-                        fi
-                else
-                        a_result2="O"
-                        c_result2="SSH를 사용중이며 PermitRootLogin 옵션이 $rootlogin로 설정되어있으므로 양호"
-                fi
-        else
-                a_result2="X"
-                c_result2="PermitRootLogin 옵션이 설정되어 있지 않으므로 취약"
-        fi
-else
+  b_result21=`netstat -ntlp | grep ssh`
+  if [ "$rootlogin" ]; then
+    if [ "$rootlogin" == "prohibit-password" ]; then
+      if [ $authcmd -eq 1 ]; then
+        a_result2="O"
+        c_result2="SSH를 사용중이며 PermitRootLogin 옵션이 $rootlogin로 설정되어있고 /root/.ssh/authorized_keys 파일의 디폴트 커맨드가 존재하므로 양호"
+        b_result22=`sed s/\'//g /root/.ssh/authorized_keys`
+      else
         a_result2="X"
-        b_result21=`netstat -ntlp | grep ssh`
-        c_result2="SSH를 미사용 중이므로 취약"
+        c_result2="SSH를 사용중이며 PermitRootLogin 옵션이 $rootlogin로 설정되어있고 /root/.ssh/authorized_keys 파일의 디폴트 커맨드가 존재하지 않으므로 취약"
+        b_result22=`sed s/\'//g /root/.ssh/authorized_keys`
+      fi
+    else
+      a_result2="O"
+      c_result2="SSH를 사용중이며 PermitRootLogin 옵션이 $rootlogin로 설정되어있으므로 양호"
+    fi
+  else
+    a_result2="X"
+    c_result2="PermitRootLogin 옵션이 설정되어 있지 않으므로 취약"
+  fi
+else
+  a_result2="X"
+  b_result21=`netstat -ntlp | grep ssh`
+  c_result2="SSH를 미사용 중이므로 취약"
 fi
 
 if [ $a_result1 == "O" -a $a_result2 == "O" ]; then
-        a_result="O"
+  a_result="O"
 else
-        a_result="X"
+  a_result="X"
 fi
 #--END
 
