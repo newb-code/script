@@ -97,9 +97,9 @@ echo "$location File Not Found."
 fi
 }
 
-# U-01 root 계정 원격 접속 제한
 function U-1(){
 #--START(점검항목 설명)
+# U-01 root 계정 원격 접속 제한
 CODE="U-01"
 MEASURES="Hot-Fix"
 #--END
@@ -232,7 +232,7 @@ elif [[ "$prlval" == "prohibit-password" ]] || [[ "$prlval" == "without-password
   fi
 fi
 
-if [ $a_result1 == "O" -a $a_result2 == "O" ]; then
+if [ "$a_result1" == "O" -a "$a_result2" == "O" ]; then
   a_result="O"
 else
   a_result="X"
@@ -281,229 +281,88 @@ json_change_start
 
 function U-2(){
 #--START(점검항목 설명)
+# U-02 패스워드 복잡성 설정
 CODE="U-02"
 MEASURES="Hot-Fix"
+
 #--END
 
 #--START(점검 명령어)
+pwcfg=`cat /etc/shadow | grep '\''$'`
 
-pass1=`cat /etc/ssh/sshd_config | grep ^PasswordAuthentication`
-pass2=`echo $pass1 | tr '[A-Z]' '[a-z]' | awk {'print $2'}`
+# 패스워드가 설정된 계정이 존재할 경우
+if [[ $pwcfg ]]; then
+  #Redhat 계열 OS
+  if [ -f /etc/pam.d/system-auth ]; then
+    pamauth=`cat /etc/pam.d/system-auth | grep -v "#" | sed '/^$/d'`
+    # /etc/pam.d/system-auth 파일 내 패스워드 복잡성 설정 여부 점검
+    if [[ `cat /etc/pam.d/system-auth | grep -v "#" | grep credit | wc -l` -gt 0 ]] || [[ `cat /etc/pam.d/system-auth | grep -v "#" | grep minclass | wc -l` -gt 0 ]]; then
+      a_result="O"
+      c_result="패스워드가 설정된 계정이 존재하며, /etc/pam.d/system-auth 파일 내 패스워드 복잡성이 설정되어 있으므로 양호"
 
-# cat /etc/ssh/sshd_config 파일 내 PasswordAuthentication 설정이 yes일 경우
-if [ $pass2 == "yes" ]; then
+    # /etc/pam.d/system-auth 파일 내 패스워드 복잡성 미설정 시
+    else
+    # /etc/security/pwquality.conf 패스워드 복잡성 설정 점검
+      pwqual=`cat /etc/security/pwquality.conf | grep -v "#" | sed '/^$/d'`
+      if [[ `cat /etc/security/pwquality.conf | grep -v "#" | grep credit | wc -l` -ge 2 ]] || [[ `cat /etc/security/pwquality.conf | grep -v "#" | grep minclass | wc -l` -gt 0 ]]; then
+        a_result="O"
+        c_result="패스워드가 설정된 계정이 존재하며, /etc/security/pwquality.conf 파일 내 패스워드 복잡성이 설정되어 있으므로 양호"
 
-	# /etc/pam.d/system-auth 파일이 존재할 경우[RHEL 계열]
-        if [ -f /etc/pam.d/system-auth ]; then
-		# /etc/pam.d/system-auth 파일에 패스워드 암호화 알고리즘 점검
-		b_result11=`cat /etc/pam.d/system-auth | grep -v "#" | egrep sha[0-9]`
-                if [ `cat /etc/pam.d/system-auth | egrep sha[0-9] | wc -l` -eq 0 ]; then
-                     	a_result="X"
-			c_result="패스워드 암호화 알고리즘이 SHA256 이상으로 설정되어 있지 않아 취약"
-                else
-                	b_result12=`cat /etc/pam.d/system-auth | grep pam_pwquality`
-	                b_result13=`cat /etc/security/pwquality.conf | grep -v "#"`
-	                c_result="패스워드 암호화 알고리즘이 SHA256 이상으로 설정되어 있으므로 양호"
-			# /etc/pam.d/system-auth 파일 내 enforce_for_root 설정 여부 점검
-                        if [ `cat /etc/pam.d/system-auth | grep enforce_for_root | wc -l` -eq 1 ]; then
+      else
+        a_result="X"
+        c_result="패스워드가 설정된 계정이 존재하며, /etc/pam.d/system-auth, /etc/security/pwquality.conf 파일 내 패스워드 복잡성이 설정되어 있지 않으므로 취약"
+      fi
+    fi
+  #Debian 계열 OS
+  else
+    pamauth=`cat /etc/pam.d/common-password | grep -v "#" | sed '/^$/d'`
+    if [[ -f /etc/security/pwquality.conf ]]; then
+      pwqual=`cat /etc/security/pwquality.conf | grep -v "#" | sed '/^$/d'`
+      #statements
+      if [[ `cat /etc/pam.d/common-password | grep -v "#" | grep credit | wc -l` -gt 0 ]] || [[ `cat /etc/pam.d/common-password | grep -v "#" | grep minclass | wc -l` -gt 0 ]]; then
+        a_result="O"
+        c_result="패스워드가 설정된 계정이 존재하며, /etc/pam.d/common-password 파일 내 패스워드 복잡성이 설정되어 있으므로 양호"
 
-				# /etc/pam.d/system-auth 파일 내 패스워드 복잡도 설정 여부 점검
-                                if [ `cat /etc/pam.d/system-auth | grep credit | wc -l` -eq 1 ]; then
-					a_result="O"
-                                	c_result="/etc/pam.d/system-auth 파일에 패스워드 복잡도 설정이 되어 있으므로 양호"
+      # /etc/pam.d/system-auth 파일 내 패스워드 복잡성 미설정 시
+      else
+      # /etc/security/pwquality.conf 패스워드 복잡성 설정 점검
+        if [[ `cat /etc/security/pwquality.conf | grep -v "#" | grep credit | wc -l` -ge 2 ]] || [[ `cat /etc/security/pwquality.conf | grep -v "#" | grep minclass | wc -l` -gt 0 ]]; then
+          a_result="O"
+          c_result="패스워드가 설정된 계정이 존재하며, /etc/security/pwquality.conf 파일 내 패스워드 복잡성이 설정되어 있으므로 양호"
 
-				# /etc/pam.d/system-auth 파일 내 패스워드 복잡도 미설정 시
-                                else
-					# /etc/security/pwquality.conf 패스워드 복잡도 설정 주석 처리 점검
-                                        if [ `cat /etc/security/pwquality.conf | grep -v "#" | wc -l` -eq 0 ]; then
-						a_result="X"
-                                                c_result="/etc/pam.d/system-auth 또는 /etc/security/pwquality.conf 파일에 패스워드 복잡도 설정이 되어 있지 않으므로 취약"
-
-					# /etc/security/pwquality.conf 패스워드 복잡도 설정 점검
-                                        else
-						if [ -z `cat /etc/security/pwquality.conf | grep -v "#" | grep ucredit | awk {'print $3'}` ]; then
-							a_result1="X"
-							c_result1="패스워드 설정 시 영대문자 1글자 이상 필수 포함 미설정되어 있으므로 취약"
-						else
-							if [ `cat /etc/security/pwquality.conf | grep -v "#" | grep ucredit | awk {'print $3'}` -le -1 ]; then
-								a_result1="O"
-	                                                        c_result1="패스워드 설정 시 영대문자 1글자 이상 필수 포함 설정되어 있으므로 양호"
-							else
-								a_result1="X"
-								c_result1="패스워드 설정 시 영대문자 1글자 이상 필수 포함 미설정되어 있으므로 취약"
-							fi
-						fi
-
-						if [ -z `cat /etc/security/pwquality.conf | grep -v "#" | grep lcredit | awk {'print $3'}` ]; then
-                                                        a_result2="X"
-                                                        c_result2="패스워드 설정 시 영소문자 1글자 이상 필수 포함 미설정되어 있으므로 취약"
-                                                else
-                                                        if [ `cat /etc/security/pwquality.conf | grep -v "#" | grep lcredit | awk {'print $3'}` -le -1 ]; then
-                                                                a_result2="O"
-                                                                c_result2="패스워드 설정 시 영소문자 1글자 이상 필수 포함 설정되어 있으므로 양호"
-                                                        else
-                                                                a_result2="X"
-                                                                c_result2="패스워드 설정 시 영소문자 1글자 이상 필수 포함 미설정되어 있으므로 취약"
-                                                        fi
-                                                fi
-
-						if [ -z `cat /etc/security/pwquality.conf | grep -v "#" | grep dcredit | awk {'print $3'}` ]; then
-                                                        a_result3="X"
-                                                        c_result3="패스워드 설정 시 숫자 1글자 이상 필수 포함 미설정되어 있으므로 취약"
-                                                else
-                                                        if [ `cat /etc/security/pwquality.conf | grep -v "#" | grep dcredit | awk {'print $3'}` -le -1 ]; then
-                                                                a_result3="O"
-                                                                c_result3="패스워드 설정 시 숫자 1글자 이상 필수 포함 설정되어 있으므로 양호"
-                                                        else
-                                                                a_result3="X"
-                                                                c_result3="패스워드 설정 시 숫자 1글자 이상 필수 포함 미설정되어 있으므로 취약"
-                                                        fi
-                                                fi
-
-						if [ -z `cat /etc/security/pwquality.conf | grep -v "#" | grep ocredit | awk {'print $3'}` ]; then
-                                                        a_result4="X"
-                                                        c_result4="패스워드 설정 시 특수문자 1글자 이상 필수 포함 미설정되어 있으므로 취약"
-                                                else
-                                                        if [ `cat /etc/security/pwquality.conf | grep -v "#" | grep ocredit | awk {'print $3'}` -le -1 ]; then
-                                                                a_result4="O"
-                                                                c_result4="패스워드 설정 시 특수문자 1글자 이상 필수 포함 설정되어 있으므로 양호"
-                                                        else
-                                                                a_result4="X"
-                                                                c_result4="패스워드 설정 시 특수문자 1글자 이상 필수 포함 미설정되어 있으므로 취약"
-                                                        fi
-                                                fi
-
-						if [ $a_result1 == "O" -a $a_result2 == "O" -a $a_result3 == "O" -a $a_result4 == "O" ]; then
-							a_result="O"
-						else
-							a_result="X"
-						fi
-                                        fi
-                                fi
-                        else
-				a_result="X"
-                                c_result="/etc/pam.d/system-auth 파일 내 enforce_for_root 설정이 되어 있지 않으므로 취약"
-                        fi
-                fi
-
-	# /etc/pam.d/common-password 파일이 존재할 경우[Ubuntu 계열]
         else
-
-		# /etc/pam.d/common-password 파일에 패스워드 암호화 알고리즘 점검
-		b_result11=`cat /etc/pam.d/common-password | grep -v "#" | egrep sha[0-9]`
-                if [ `cat /etc/pam.d/common-password | grep -v "#" | egrep sha[0-9] | wc -l` -eq 0 ]; then
-				a_result="X"
-	                        c_result="패스워드 암호화 알고리즘이 SHA256 이상으로 설정되어 있지 않아 취약"
-                else
-                        b_result12=`cat /etc/pam.d/common-password | grep pam_pwquality`
-                        b_result13=`cat /etc/security/pwquality.conf | grep -v "#"`
-
-			# /etc/pam.d/common-password 파일 내 enforce_for_root 설정 여부 점검
-                        if [ `cat /etc/pam.d/common-password | grep enforce_for_root | wc -l` -eq 1 ]; then
-
-				# /etc/pam.d/common-password 파일 내 패스워드 복잡도 설정 여부 점검
-                                if [ `cat /etc/pam.d/common-password | grep credit | wc -l` -eq 1 ]; then
-					a_result="O"
-                                        c_result="/etc/pam.d/common-password 파일에 패스워드 복잡도 설정이 되어 있으므로 양호"
-
-				# /etc/pam.d/common-password 파일 내 패스워드 복잡도 미설정 시
-                                else
-					# /etc/security/pwquality.conf 패스워드 복잡도 설정 주석 처리 점검
-                                        if [ `cat /etc/security/pwquality.conf | grep -v "#" | wc -l` -eq 0 ]; then
-						a_result="X"
-                                                c_result="/etc/pam.d/common-password 또는 /etc/security/pwquality.conf 파일에 패스워드 복잡도 설정이 되어 있지 않으므로 취약"
-
-					# /etc/security/pwquality.conf 패스워드 복잡도 설정 점검
-					else
-                                                if [ -z `cat /etc/security/pwquality.conf | grep -v "#" | grep ucredit | awk {'print $3'}` ]; then
-                                                        a_result1="X"
-                                                        c_result1="패스워드 설정 시 영대문자 1글자 이상 필수 포함 미설정되어 있으므로 취약"
-                                                else
-                                                        if [ `cat /etc/security/pwquality.conf | grep -v "#" | grep ucredit | awk {'print $3'}` -le -1 ]; then
-                                                                a_result1="O"
-                                                        else
-                                                                a_result1="X"
-                                                                c_result1="패스워드 설정 시 영대문자 1글자 이상 필수 포함 미설정되어 있으므로 취약"
-                                                        fi
-                                                fi
-
-                                                if [ -z `cat /etc/security/pwquality.conf | grep -v "#" | grep lcredit | awk {'print $3'}` ]; then
-                                                        a_result2="X"
-                                                        c_result2="패스워드 설정 시 영소문자 1글자 이상 필수 포함 미설정되어 있으므로 취약"
-                                                else
-                                                        if [ `cat /etc/security/pwquality.conf | grep -v "#" | grep lcredit | awk {'print $3'}` -le -1 ]; then
-                                                                a_result2="O"
-                                                        else
-                                                                a_result2="X"
-                                                                c_result2="패스워드 설정 시 영소문자 1글자 이상 필수 포함 미설정되어 있으므로 취약"
-                                                        fi
-                                                fi
-
-                                                if [ -z `cat /etc/security/pwquality.conf | grep -v "#" | grep dcredit | awk {'print $3'}` ]; then
-                                                        a_result3="X"
-                                                        c_result3="패스워드 설정 시 숫자 1글자 이상 필수 포함 미설정되어 있으므로 취약"
-                                                else
-                                                        if [ `cat /etc/security/pwquality.conf | grep -v "#" | grep dcredit | awk {'print $3'}` -le -1 ]; then
-                                                                a_result3="O"
-                                                        else
-                                                                a_result3="X"
-                                                                c_result3="패스워드 설정 시 숫자 1글자 이상 필수 포함 미설정되어 있으므로 취약"
-                                                        fi
-                                                fi
-
-                                                if [ -z `cat /etc/security/pwquality.conf | grep -v "#" | grep ocredit | awk {'print $3'}` ]; then
-                                                        a_result4="X"
-                                                        c_result4="패스워드 설정 시 특수문자 1글자 이상 필수 포함 미설정되어 있으므로 취약"
-                                                else
-                                                        if [ `cat /etc/security/pwquality.conf | grep -v "#" | grep ocredit | awk {'print $3'}` -le -1 ]; then
-                                                                a_result4="O"
-                                                        else
-                                                                a_result4="X"
-                                                                c_result4="패스워드 설정 시 특수문자 1글자 이상 필수 포함 미설정되어 있으므로 취약"
-                                                        fi
-                                                fi
-
-						if [ $a_result1 == "O" -a $a_result2 == "O" -a $a_result3 == "O" -a $a_result4 == "O" ]; then
-                                                        a_result="O"
-                                                else
-                                                        a_result="X"
-                                                fi
-                                        fi
-                                fi
-                        else
-				a_result="X"
-                                c_result="/etc/pam.d/common-password 파일 내 enforce_for_root 설정이 되어 있지 않으므로 취약"
-                        fi
-                fi
+          a_result="X"
+          c_result="패스워드가 설정된 계정이 존재하며, /etc/pam.d/common-password, /etc/security/pwquality.conf 파일 내 패스워드 복잡성이 설정되어 있지 않으므로 취약"
         fi
+      fi
+    else
+      a_result="X"
+      pwqual="/etc/security/pwquality.conf 파일 없음"
+      c_result="패스워드가 설정된 계정이 존재하며, libpam-pwquality 모듈이 설치되지 않아 패스워드 복잡성을 설정할 수 없으므로 취약"
+    fi
+  fi
+# 패스워드가 설정된 계정이 없을 경우
 else
-	a_result="O"
-        c_result="/etc/ssh/sshd_config 파일 내 PasswordAuthentication 설정값이 no이고 PEM key를 사용하므로 양호"
+  a_result="O"
+  c_result="패스워드가 설정된 계정이 존재하지 않으며, 2048비트 SSH-2 RSA 키를 사용하는 key pair 방식이나 AWS SSM 서비스를 사용하므로 양호"
 fi
 #--END
 
 # 명령 출력 #
 
 #--START(점검 방법)
-scriptResult="1.PasswordAuthentication 설정값 확인
-PasswordAuthentication $pass2
+scriptResult="1. 패스워드 설정된 계정 확인
+$pwcfg
 
-2.패스워드 암호화 방식 확인
-$b_result11
+2. 패스워드 복잡성 확인
+$pamauth
 
-3.패스워드 복잡도 확인
-$b_result12
-
-4.패스워드 복잡도 설정 파일(pwquality.conf) 확인
-$b_result13
+3.패스워드 복잡성 설정 파일(pwquality.conf) 확인
+$pwqual
 "
 chkStatus="$a_result"
 chkResult="[결과값]
 $c_result
-$c_result1
-$c_result2
-$c_result3
-$c_result4
 "
 #--END
 
@@ -513,161 +372,126 @@ json_change_m
 
 function U-3(){
 #--START(점검항목 설명)
+# U-03 계정 잠금 임계값 설정
 CODE="U-03"
 MEASURES="Hot-Fix"
 #--END
 
 #--START(점검 명령어)
+# 패스워드가 설정된 계정이 존재할 경우
+pwcfg=`cat /etc/shadow | grep '\''$'`
+if [[ $pwcfg ]]; then
+  #Redhat 계열 OS
+  if [ -f /etc/pam.d/system-auth ]; then
+    auth1=`cat /etc/pam.d/system-auth | grep -v "#" | sed '/^$/d'`
+    auth2=`cat /etc/pam.d/password-auth | grep -v "#" | sed '/^$/d'`
+    # /etc/pam.d/system-auth 점검
+    if [[ `cat /etc/pam.d/system-auth | grep ^auth | grep pam_tally | wc -l` -gt 0 ]] && [[ `cat /etc/pam.d/system-auth | grep ^account | grep pam_tally | wc -l` -gt 0 ]]; then
+      # pam_tally 모듈이 pam_unix 모듈보다 상단에 위치하는지 확인
+      unixnum=`cat /etc/pam.d/system-auth | grep ^auth | grep -n pam_unix.so | awk -F: {'print $1'}`
+      tallynum=`cat /etc/pam.d/system-auth | grep ^auth | grep -n pam_tally | awk -F: {'print $1'}`
+      if [ $unixnum -gt $tallynum ];then
+        a_result1="O"
+        c_result1="패스워드가 설정된 계정이 존재하며, /etc/pam.d/system-auth 파일 내 pam_tally 모듈을 사용하여 ID/PW 방식을 이용한 로그인 실패 시 계정 잠금이 설정되어 있으므로 양호"
+      else
+        a_result1="X"
+        c_result1="패스워드가 설정된 계정이 존재하며, /etc/pam.d/system-auth 파일 내 pam_tally 모듈의 설정 위치가 잘못되어 로그인 실패 시 계정 잠금이 적용되지 않으므로 취약"
+      fi
 
-pass1=`cat /etc/ssh/sshd_config | grep ^PasswordAuthentication`
-pass2=`echo $pass1 | tr '[A-Z]' '[a-z]' | awk {'print $2'}`
-b_result=`cat /etc/ssh/sshd_config | grep -v "#" | grep PasswordAuthentication`
+    elif [[ `cat /etc/pam.d/system-auth | grep ^auth | grep pam_faillock | wc -l` -gt 0 ]] && [[ `cat /etc/pam.d/system-auth | grep ^account | grep pam_faillock | wc -l` -gt 0 ]]; then
+      unixnum=`cat /etc/pam.d/system-auth | grep ^auth | grep -n pam_unix.so | awk -F: {'print $1'}`
+      prefail=`cat /etc/pam.d/system-auth | grep ^auth | grep -n preauth | awk -F: {'print $1'}`
+      authfail=`cat /etc/pam.d/system-auth | grep ^auth | grep -n authfail | awk -F: {'print $1'}`
+      if [ $prefail -lt $unixnum -a $authfail -gt $unixnum ]; then
+        a_result1="O"
+        c_result1="패스워드가 설정된 계정이 존재하며, /etc/pam.d/system-auth 파일 내 pam_faillock 모듈을 사용하여 ID/PW 방식의 로그인 실패 시 계정 잠금이 설정되어 있으므로 양호"
+      else
+        a_result1="X"
+        c_result1="패스워드가 설정된 계정이 존재하며, /etc/pam.d/system-auth 파일 내 pam_faillock 모듈의 설정 위치가 잘못되어 ID/PW 방식의 로그인 실패 시 계정 잠금이 적용되지 않으므로 취약"
+      fi
+    else
+      a_result1="X"
+      c_result1="패스워드가 설정된 계정이 존재하며, /etc/pam.d/system-auth 파일 내 pam_tally, pam_faillock 모듈을 사용한 계정 잠금 설정이 없으므로 취약"
+    fi
 
-# cat /etc/ssh/sshd_config 파일 내 PasswordAuthentication 설정이 yes일 경우
-if [ $pass2 == "yes" ]; then
+    # /etc/pam.d/password-auth 점검
+    if [[ `cat /etc/pam.d/password-auth | grep ^auth | grep pam_tally | wc -l` -gt 0 ]] && [[ `cat /etc/pam.d/password-auth | grep ^account | grep pam_tally | wc -l` -gt 0 ]]; then
+      # pam_tally 모듈이 pam_unix 모듈보다 상단에 위치하는지 확인
+      unixnum=`cat /etc/pam.d/password-auth | grep ^auth | grep -n pam_unix.so | awk -F: {'print $1'}`
+      tallynum=`cat /etc/pam.d/password-auth | grep ^auth | grep -n pam_tally | awk -F: {'print $1'}`
+      if [ $unixnum -gt $tallynum ];then
+        a_result2="O"
+        c_result2="패스워드가 설정된 계정이 존재하며, /etc/pam.d/password-auth 파일 내 pam_tally 모듈을 사용하여 ID/PW 방식의 로그인 실패 시 계정 잠금이 설정되어 있으므로 양호"
+      else
+        a_result2="X"
+        c_result2="패스워드가 설정된 계정이 존재하며, /etc/pam.d/password-auth 파일 내 pam_tally 모듈의 설정 위치가 잘못되어 ID/PW 방식의 로그인 실패 시 계정 잠금이 적용되지 않으므로 취약"
+      fi
 
-	# /etc/pam.d/system-auth 파일이 존재할 경우[RHEL 계열]
-	if [ -f /etc/pam.d/system-auth ]; then
+    elif [[ `cat /etc/pam.d/password-auth | grep ^auth | grep pam_faillock | wc -l` -gt 0 ]] && [[ `cat /etc/pam.d/password-auth | grep ^account | grep pam_faillock | wc -l` -gt 0 ]]; then
+      unixnum=`cat /etc/pam.d/password-auth | grep ^auth | grep -n pam_unix.so | awk -F: {'print $1'}`
+      prefail=`cat /etc/pam.d/password-auth | grep ^auth | grep -n preauth | awk -F: {'print $1'}`
+      authfail=`cat /etc/pam.d/password-auth | grep ^auth | grep -n authfail | awk -F: {'print $1'}`
+      if [ $prefail -lt $unixnum -a $authfail -gt $unixnum ]; then
+        a_result2="O"
+        c_result2="패스워드가 설정된 계정이 존재하며, /etc/pam.d/password-auth 파일 내 pam_faillock 모듈을 사용하여 ID/PW 방식의 로그인 실패 시 계정 잠금이 설정되어 있으므로 양호"
+      else
+        a_result2="X"
+        c_result2="패스워드가 설정된 계정이 존재하며, /etc/pam.d/password-auth 파일 내 pam_faillock 모듈의 설정 위치가 잘못되어 ID/PW 방식의 로그인 실패 시 계정 잠금이 적용되지 않으므로 취약"
+      fi
+    else
+      a_result2="X"
+      c_result2="패스워드가 설정된 계정이 존재하며, /etc/pam.d/password-auth 파일 내 pam_tally, pam_faillock 모듈을 사용한 계정 잠금 설정이 없으므로 취약"
+    fi
 
-		# /etc/pam.d/system-auth 파일에 pam_tally 모듈 사용 여부 점검
-		if [ `cat /etc/pam.d/system-auth | grep ^auth | grep pam_tally | wc -l` -eq 1 -a `cat /etc/pam.d/system-auth | grep ^account | grep pam_tally | wc -l` -eq 1 ]; then
-			b_result1=`cat /etc/pam.d/system-auth | grep pam_tally`
-			# pam_tally 모듈이 pam_unix 모듈보다 상단에 위치하는지 확인
-                        unixnum=`cat /etc/pam.d/system-auth | grep ^auth | grep -n pam_unix.so | awk -F: {'print $1'}`
-                        tallynum=`cat /etc/pam.d/system-auth | grep ^auth | grep -n pam_tally | awk -F: {'print $1'}`
-                        if [ $unixnum -gt $tallynum ];then
+    if [[ "$a_result1" == "O" ]] && [[ "$a_result2" == "O" ]]; then
+      #statements
+      a_result="O"
+    else
+      a_result="X"
+    fi
+  # Debian 계열 OS
+  else
+	# /etc/pam.d/common-auth 파일에 pam_tally 모듈 사용 여부 점검
+    auth3=`cat /etc/pam.d/common-auth | grep -v "#" | sed '/^$/d'`
+    if [[ `cat /etc/pam.d/common-auth | grep -v "#" | grep pam_tally | wc -l` -gt 0 ]]; then
+      #statements
+      a_result="O"
+      c_result3="패스워드가 설정된 계정이 존재하며, /etc/pam.d/common-auth 파일 내 pam_tally 모듈을 사용하여 ID/PW 방식의 로그인 실패 시 계정 잠금이 설정되어 있으므로 양호"
+    else
+      a_result="X"
+      c_result3="패스워드가 설정된 계정이 존재하며, /etc/pam.d/common-auth 파일 내 pam_tally 모듈을 사용한 계정 잠금 설정이 없으므로 취약"
+    fi
+  fi
 
-				# pam_tally 모듈 잠금 임계값 추출
-                                denycnt=`cat /etc/pam.d/system-auth | sed -rn 's/.*deny=([[:digit:]]).*/\1/p'`
-                                if [ $denycnt -gt 5 ]; then
-					a_result="X"
-                                        c_result="/etc/pam.d/system-auth 파일에 패스워드 실패 시 잠금 설정이 되어 있으나 잠금임계값이 5를 초과하므로 취약"
-                                else
-					a_result="O"
-                                        c_result="/etc/pam.d/system-auth 파일에 패스워드 실패 시 잠금 설정이 되어 있으며 잠금임계값이 5이하이므로 양호"
-                                fi
-                        else
-				a_result="X"
-                                c_result="/etc/pam.d/system-auth 파일에 pam_tally 모듈 위치가 잘못 설정되어 잠금 임계값이 미적용되므로 취약"
-                        fi
-
-		# /etc/pam.d/system-auth 파일에 faillock  모듈 사용 여부 점검
-		elif [ `cat /etc/pam.d/system-auth | grep ^auth | grep pam_faillock | wc -l` -eq 2 -a `cat /etc/pam.d/system-auth | grep ^account | grep pam_faillock | wc -l` -eq 1 ]; then
-			b_result1=`cat /etc/pam.d/system-auth | grep pam_faillock`
-			unixnum=`cat /etc/pam.d/system-auth | grep ^auth | grep -n pam_unix.so | awk -F: {'print $1'}`
-			prefail=`cat /etc/pam.d/system-auth | grep ^auth | grep -n preauth | awk -F: {'print $1'}`
-			authfail=`cat /etc/pam.d/system-auth | grep ^auth | grep -n authfail | awk -F: {'print $1'}`
-			if [ $prefail -lt $unixnum -a $authfail -gt $unixnum ]; then
-				denycnt=`cat /etc/pam.d/system-auth | sed -rn 's/.*deny=([[:digit:]]).*/\1/p' | uniq`
-                                if [ $denycnt -gt 5 ]; then
-					a_result="X"
-                                        c_result="/etc/pam.d/system-auth 파일에 패스워드 실패 시 잠금 설정이 되어 있으나 잠금임계값이 5를 초과하므로 취약"
-                                else
-					a_result="O"
-                                        c_result="/etc/pam.d/system-auth 파일에 패스워드 실패 시 잠금 설정이 되어 있으며 잠금임계값이 5이하이므로 양호"
-                                fi
-                        else
-				a_result="X"
-                                c_result="/etc/pam.d/system-auth 파일에 faillock 모듈 위치가 잘못 설정되어 잠금 임계값이 미적용되므로 취약"
-                        fi
-		else
-			a_result="X"
-			b_result=`cat /etc/pam.d/system-auth`
-			c_result="/etc/pam.d/system-auth 파일에 계정 잠금 임계값이 미설정되어 있으므로 취약"
-		fi
-
-		# /etc/pam.d/password-auth 파일에 pam_tally 모듈 사용 여부 점검
-                if [  `cat /etc/pam.d/password-auth | grep ^auth | grep pam_tally | wc -l` -eq 1 -a  `cat /etc/pam.d/password-auth | grep ^account | grep pam_tally | wc -l` -eq 1 ]; then
-			b_result2=`cat /etc/pam.d/password-auth | grep pam_tally`
-			# pam_tally 모듈이 pam_unix 모듈보다 상단에 위치하는지 확인
-                        unixnum=`cat /etc/pam.d/password-auth | grep ^auth | grep -n pam_unix.so | awk -F: {'print $1'}`
-                        tallynum=`cat /etc/pam.d/password-auth | grep ^auth | grep -n pam_tally | awk -F: {'print $1'}`
-                        if [ $unixnum -gt $tallynum ];then
-
-				# pam_tally 모듈 잠금 임계값 추출
-                                denycnt=`cat /etc/pam.d/password-auth | sed -rn 's/.*deny=([[:digit:]]).*/\1/p'`
-                                if [ $denycnt -gt 5 ]; then
-					a_result="X"
-                                        c_result="/etc/pam.d/password-auth 파일에 패스워드 실패 시 잠금 설정이 되어 있으나 잠금임계값이 5를 초과하므로 취약"
-                                else
-					a_result="O"
-                                        c_result="/etc/pam.d/password-auth 파일에 패스워드 실패 시 잠금 설정이 되어 있으며 잠금임계값이 5이하이므로 양호"
-                                fi
-                        else
-				a_result="X"
-                                c_result="pam_tally 모듈 위치가 잘못 설정되어 잠금 임계값이 미적용되므로 취약"
-                        fi
-
-		# /etc/pam.d/password-auth 파일에 faillock  모듈 사용 여부 점검
-                elif [  `cat /etc/pam.d/password-auth | grep ^auth | grep pam_faillock | wc -l` -eq 2 -a  `cat /etc/pam.d/password-auth | grep ^account | grep pam_faillock | wc -l` -eq 1 ]; then
-			b_result2=`cat /etc/pam.d/password-auth | grep pam_faillock`
-                        unixnum=`cat /etc/pam.d/password-auth | grep ^auth | grep -n pam_unix.so | awk -F: {'print $1'}`
-                        prefail=`cat /etc/pam.d/password-auth | grep ^auth | grep -n preauth | awk -F: {'print $1'}`
-                        authfail=`cat /etc/pam.d/password-auth | grep ^auth | grep -n authfail | awk -F: {'print $1'}`
-                        if [ $prefail -lt $unixnum -a $authfail -gt $unixnum ]; then
-                                denycnt=`cat /etc/pam.d/password-auth | sed -rn 's/.*deny=([[:digit:]]).*/\1/p' | uniq`
-                                if [ $denycnt -gt 5 ]; then
-					a_result="X"
-                                        c_result="/etc/pam.d/password-auth 파일에 패스워드 실패 시 잠금 설정이 되어 있으나 잠금임계값이 5를 초과하므로 취약"
-                                else
-					a_result="O"
-                                        c_result="/etc/pam.d/password-auth 파일에 패스워드 실패 시 잠금 설정이 되어 있으며 잠금임계값이 5이하이므로 양호"
-                                fi
-                        else
-				a_result="X"
-                                c_result="/etc/pam.d/password-auth 파일에 faillock 모듈 위치가 잘못 설정되어 잠금 임계값이 미적용되므로 취약"
-                        fi
-                else
-			a_result="X"
-                        c_result="/etc/pam.d/password-auth 파일에 계정 잠금 임계값이 미설정되어 있으므로 취약"
-                fi
-
-	# /etc/pam.d/common-auth 파일이 존재할 경우[Ubuntu 계열]
-	else
-		# /etc/pam.d/common-auth 파일에 pam_tally 모듈 사용 여부 점검
-                autally=`cat /etc/pam.d/common-auth | grep ^auth | grep pam_tally | wc -l`
-		b_result3=`cat /etc/pam.d/common-auth | grep pam_tally`
-                if [ $autally -eq 1 ]; then
-
-			# pam_tally 모듈 잠금 임계값 추출
-                        denycnt=`cat /etc/pam.d/common-auth | sed -rn 's/.*deny=([[:digit:]]).*/\1/p'`
-                        if [ $denycnt -gt 5 ]; then
-				a_result="X"
-                                c_result="패스워드 실패 시 잠금 설정이 되어 있으나 잠금임계값이 5를 초과하므로 취약"
-                        else
-				a_result="O"
-                                c_result="패스워드 실패 시 잠금 설정이 되어 있으며 잠금임계값이 5이하이므로 양호"
-                        fi
-                else
-			a_result="X"
-                        c_result="계정 잠금 임계값이 미설정되어 있으므로 취약"
-                fi
-	fi
 else
-	a_result="O"
-	c_result="PasswordAuthentication 설정이 no이고 PEM key를 사용하므로 양호"
+  a_result="O"
+  c_result3="패스워드가 설정된 계정이 존재하지 않으며, 2048비트 SSH-2 RSA 키를 사용하는 key pair 방식이나 AWS SSM 서비스를 사용하므로 양호"
 fi
 #--END
 
 # 명령 출력 #
 
 #--START(점검 방법)
-scriptResult="1. 패스워드 방식 사용하는지 확인
-$b_result
+scriptResult="1. 패스워드 설정된 계정 확인
+$pwcfg
 
 2. 패스워드 임계값 모듈 사용 점검
-/etc/pam.d/system-auth에 pam_tally, pam_faillock 모듈 사용하는지 여부 확인(콘솔 로그인, su 전환)
-$b_result1
+[Redhat 계열 OS]
+- /etc/pam.d/system-auth에 pam_tally, pam_faillock 모듈 사용하는지 여부 확인(콘솔 로그인, su 전환)
+$auth1
 
-/etc/pam.d/password-auth에 pam_tally, pam_faillock 모듈 사용하는지 여부 확인(telnet, ssh, ftp 원격 접속)
-$b_result2
+- /etc/pam.d/password-auth에 pam_tally, pam_faillock 모듈 사용하는지 여부 확인(telnet, ssh, ftp 원격 접속)
+$auth2
 
-/etc/pam.d/common-auth에 pam_tally 모듈 사용하는지 여부 확인
-$b_result3
+[Debian 계열 OS]
+- /etc/pam.d/common-auth에 pam_tally 모듈 사용하는지 여부 확인
+$auth3
 "
 chkStatus="$a_result"
 chkResult="[결과값]
-$c_result
+$c_result1
+$c_result2
+$c_result3
 "
 #--END
 
@@ -677,6 +501,7 @@ json_change_m
 
 function U-4(){
 #--START(점검항목 설명)
+# U-04 패스워드 파일 보호
 CODE="U-04"
 MEASURES="단기"
 #--END
@@ -685,21 +510,24 @@ MEASURES="단기"
 
 if [ `cat /etc/passwd | awk -F: '{print $1":" $2}' | grep x | wc -l` -eq `cat /etc/passwd | wc -l` ] ; then
 	a_result="O"
-	c_result="shadow 패스워드를 사용하여 /etc/passwd 파일 내 두번째 필드가 x 이므로 양호"
+	c_result="/etc/shadow 파일을 사용하여 패스워드를 암호화하여 저장하고 있으므로 양호"
 else
 	a_result="X"
-	c_result="shadow 패스워드를 사용하지 않아 /etc/passwd 파일 내 두번째 필드가 x가 아니므로 취약"
+	c_result="/etc/shadow 파일을 사용하여 패스워드를 암호화하여 저장하지 않으므로 취약"
 fi
 
-b_result=`cat /etc/passwd | awk -F: '{print $1":" $2}'`
+b_result=`cat /etc/passwd`
+b_result2=`cat /etc/shadow`
 #--END
 
 # 명령 출력 #
 
 #--START(점검 방법)
-scriptResult="1. /etc/shadow 파일을 사용하고 있는지 확인
+scriptResult="1. /etc/passwd 파일 점검
 $b_result
 
+2. /etc/shadow 파일 점검
+$b_result2
 "
 chkStatus="$a_result"
 chkResult="[결과값]
@@ -713,6 +541,7 @@ json_change_m
 
 function U-5(){
 #--START(점검항목 설명)
+# U-05 root 이외의 UID가 0 금지
 CODE="U-05"
 MEASURES="단기"
 #--END
@@ -722,31 +551,19 @@ MEASURES="단기"
 b_result=`awk -F: '{if ($3 == "0") print $1" "$3}' /etc/passwd`
 
 if [ `cat /etc/passwd | awk -F: '{print $3}' | grep -w "0" | wc -l` -eq 1 ] ; then
-	a_result="O"
-        c_result="root 계정과 같은 UID를 가진 계정이 존재하지 않으므로 양호"
+  a_result="O"
+  c_result="root 계정과 같은 UID를 가진 계정이 존재하지 않으므로 양호"
 else
-	a_result="X"
-        c_result="root 계정과 같은 UID를 가진 계정이 존재하므로 취약"
+  a_result="X"
+  c_result="root 계정과 같은 UID를 가진 계정이 존재하므로 취약"
 fi
-
-ruid=`cat /etc/passwd | grep ^root | awk -F: {'print $3'}`
-for value in $(cat /etc/passwd | grep -v ^root | awk -F: {'print $3'}); do
-	if [ $ruid == $value ]; then
-		a_result="X"
-		c_result="root 계정과 같은 UID를 가진 계정이 존재하므로 취약"
-        else
-		a_result="O"
-        	c_result="root 계정과 같은 UID를 가진 계정이 존재하지 않으므로 양호"
-        fi
-done
 #--END
 
 # 명령 출력 #
 
 #--START(점검 방법)
-scriptResult="1. root와 동일한 UID를 사용하는 계정이 있는지 점검
+scriptResult="1. root와 동일한 UID를 사용하는 계정 점검
 $b_result
-
 "
 chkStatus="$a_result"
 chkResult="[결과값]
@@ -760,54 +577,54 @@ json_change_m
 
 function U-6(){
 #--START(점검항목 설명)
+# U-06 root 계정 su 제한
 CODE="U-06"
 MEASURES="단기"
 #--END
 
 #--START(점검 명령어)
-
 usewhl=`cat /etc/pam.d/su | grep -v "#" | grep pam_wheel.so | wc -l`
 nullcheck=`cat /etc/group | grep wheel | awk -F: {'print $4'} | awk -F',' {'print $2'}`
 b_result=`cat /etc/pam.d/su | grep -v "#" | grep pam_wheel.so`
 b_result1=`cat /etc/group | grep wheel`
 
 if [ $usewhl -gt 0 ]; then
-	if [ `cat /etc/group | grep wheel | wc -l` -eq 1 ]; then
-		if [ -z "$nullcheck" ]; then
-			a_result="O"
-			c_result="/etc/group 파일 내 wheel 그룹에 기본 계정(ec2-user, ubuntu, admin 등) 외에 일반 계정이 존재하지 않으므로 양호"
-	        else
-			a_result="-"
-			c_result="/etc/group 파일 내 wheel 그룹에 기본 계정(ec2-user, ubuntu, admin 등) 외에  일반 계정이 존재하므로 인터뷰 시 확인 필요"
-		fi
-	else
-		a_result="X"
-		c_result="/etc/group 파일 내 wheel 그룹이 존재하지 않으므로 취약"
-	fi
+  if [ `cat /etc/group | grep wheel | wc -l` -eq 1 ]; then
+    if [ -z "$nullcheck" ]; then
+      a_result="O"
+      c_result="/etc/group 파일 내 wheel 그룹에 기본 계정(ec2-user, ubuntu, admin 등) 외에 일반 계정이 존재하지 않으므로 양호"
+    else
+      a_result="-"
+      c_result="/etc/group 파일 내 wheel 그룹에 기본 계정(ec2-user, ubuntu, admin 등) 외에  일반 계정이 존재하므로 인터뷰 시 확인 필요"
+    fi
+  else
+    a_result="X"
+    c_result="/etc/group 파일 내 wheel 그룹이 존재하지 않으므로 취약"
+  fi
 else
-	b_result2=`ls -l /bin/su | awk {'print $1"  "$3"  "$4'}`
-	if [ `cat /etc/group | grep wheel | wc -l` -eq 1 ]; then
-	        if [ "`f_permit /bin/su 4750`" == "OK" ]; then
-			if [ `ls -l /bin/su | awk {'print $4'}` == "wheel" ]; then
-				if [ -z "$nullcheck" ]; then
-					a_result="O"
-					c_result="/etc/group 파일 내 wheel 그룹에 기본 계정(ec2-user, ubuntu, admin 등) 외에 일반 계정이 존재하지 않으므로 양호"
-			        else
-					a_result="-"
-        	        		c_result="/etc/group 파일 내 wheel 그룹에 기본 계정(ec2-user, ubuntu, admin 등) 외에  일반 계정이 존재하므로 인터뷰 시 확인 필요"
-			        fi
-			else
-				a_result="X"
-				c_result="/bin/su 파일의 권한이 4750으로 설정되어 있으나 소유그룹이 wheel이 아니므로 취약"
-			fi
-		else
-			a_result="X"
-			c_result="/bin/su 파일의 권한이 4750이 아니므로 취약"
-		fi
-	else
-		a_result="X"
-                c_result="/etc/group 파일 내 wheel 그룹이 존재하지 않으므로 취약"
-	fi
+  b_result2=`ls -l /bin/su | awk {'print $1"  "$3"  "$4'}`
+  if [ `cat /etc/group | grep wheel | wc -l` -eq 1 ]; then
+    if [ "`f_permit /bin/su 4750`" == "OK" ]; then
+      if [ `ls -l /bin/su | awk {'print $4'}` == "wheel" ]; then
+        if [ -z "$nullcheck" ]; then
+          a_result="O"
+          c_result="/etc/group 파일 내 wheel 그룹에 기본 계정(ec2-user, ubuntu, admin 등) 외에 일반 계정이 존재하지 않으므로 양호"
+        else
+          a_result="-"
+          c_result="/etc/group 파일 내 wheel 그룹에 기본 계정(ec2-user, ubuntu, admin 등) 외에  일반 계정이 존재하므로 인터뷰 시 확인 필요"
+        fi
+      else
+        a_result="X"
+        c_result="/bin/su 파일의 권한이 4750으로 설정되어 있으나 소유그룹이 wheel이 아니므로 취약"
+      fi
+    else
+      a_result="X"
+      c_result="/bin/su 파일의 권한이 4750이 아니므로 취약"
+    fi
+  else
+    a_result="X"
+    c_result="/etc/group 파일 내 wheel 그룹이 존재하지 않으므로 취약"
+  fi
 fi
 #--END
 
@@ -839,117 +656,118 @@ CODE="U-07"
 MEASURES="Hot-Fix"
 #--END
 
-
 #--START(점검 명령어)
-
-pass1=`cat /etc/ssh/sshd_config | grep ^PasswordAuthentication`
-pass2=`echo $pass1 | tr '[A-Z]' '[a-z]' | awk {'print $2'}`
-
-# cat /etc/ssh/sshd_config 파일 내 PasswordAuthentication 설정이 yes일 경우
-if [ $pass2 == "yes" ]; then
-	# /etc/pam.d/system-auth 파일이 존재할 경우[RHEL 계열]
-	b_result1=`cat /etc/pam.d/system-auth | grep -v "#"`
-	b_result2=`cat /etc/security/pwquality.conf | grep -v "#" | grep minlen`
-	b_result3=`cat /etc/login.defs | grep -v "#" | grep PASS_MIN_LEN`
-        if [ `ls -al /etc/pam.d/system-auth | wc -l` -eq 1 ]; then
-
-	# /etc/pam.d/system-auth 파일 내 패스워드 최소 길이 설정 여부 점검
-	        if [ `cat /etc/pam.d/system-auth | grep minlen | wc -l` -eq 1 ]; then
-			if [ `cat /etc/pam.d/system-auth | sed -rn 's/.*minlen=([[:digit:]]).*/\1/p'` -ge 8 ]; then
-				a_result="O"
-	                	c_result="/etc/pam.d/system-auth 파일에 패스워드 최소 길이가 8자 이상으로 설정되어 있으므로 양호"
-			else
-				a_result="X"
-				c_result="/etc/pam.d/system-auth 파일에 패스워드 최소 길이가 8자 미만으로 설정되어 있으므로 취약"
-			fi
-
-		# /etc/pam.d/system-auth 파일 내 패스워드 최소 길이  미설정 시
-                else
-			# /etc/security/pwquality.conf 파일 내 패스워드 최소 길이 설정  점검
-                        if [ `cat /etc/security/pwquality.conf | grep -v "#" | grep minlen | wc -l` -eq 1 ]; then
-				if [ `cat /etc/security/pwquality.conf | grep minlen | awk -F'=' {'print $2'}` -ge 8 ]; then
-					a_result="O"
-	                        	c_result="/etc/security/pwquality.conf 파일에 패스워드 최소 길이가 8자 이상으로 설정되어 있으므로 양호"
-				else
-					a_result="X"
-					c_result="/etc/security/pwquality.conf 파일에 패스워드 최소 길이가 8자 미만으로 설정되어 있으므로 취약"
-	                        fi
-                        else
-				# /etc/login.defs 파일 내 패스워드 최소 길이 설정 점검
-				if [ `cat /etc/login.defs | grep -v "#" | grep PASS_MIN_LEN | wc -l` -eq 0 ]; then
-					a_result="X"
-					c_result="/etc/login.defs 파일에 패스워드 최소 길이가 설정되어 있지 않으므로 취약"
-				else
-					if [ `cat /etc/login.defs | grep -v "#" | grep PASS_MIN_LEN | awk {'print $2'}` -ge 8 ]; then
-						a_result="O"
-						c_result="/etc/login.defs 파일에 패스워드 최소 길이가 8자 이상으로 설정되어 있으므로 양호"
-					else
-						a_result="X"
-						c_result="/etc/login.defs 파일에 패스워드 최소 길이가 8자 미만으로 설정되어 있으므로 취약"
-					fi
-				fi
-                        fi
-                fi
-
-	# /etc/pam.d/common-password 파일이 존재할 경우[Ubuntu 계열]
+pwcfg=`cat /etc/shadow | grep '\''$'`
+if [[ $pwcfg ]]; then
+  #Redhat 계열 OS
+  if [ -f /etc/pam.d/system-auth ]; then
+    pamauth=`cat /etc/pam.d/system-auth | grep -v "#" | sed '/^$/d'`
+    pwqual=`cat /etc/security/pwquality.conf | grep -v "#" | sed '/^$/d'`
+    pwminl=`cat /etc/login.defs | grep -v "#" | grep PASS_MIN_LEN`
+    # /etc/pam.d/system-auth 파일 내 패스워드 최소 길이 설정 여부 점검
+    if [[ `cat /etc/pam.d/system-auth | grep -v "#" | grep minlen | wc -l` -gt 0 ]]; then
+      if [ `cat /etc/pam.d/system-auth | sed -rn 's/.*minlen=([[:digit:]]).*/\1/p'` -ge 8 ]; then
+        a_result="O"
+        c_result="패스워드가 설정된 계정이 존재하며, /etc/pam.d/system-auth 파일에 패스워드 최소 길이가 8자 이상으로 설정되어 있으므로 양호"
+      else
+        a_result="X"
+        c_result="패스워드가 설정된 계정이 존재하며, /etc/pam.d/system-auth 파일에 패스워드 최소 길이가 8자 미만으로 설정되어 있으므로 취약"
+      fi
+    elif [[ `cat /etc/pam.d/system-auth | grep -v "#" | grep minclass | wc -l` -gt 0 ]]; then
+      #statements
+      a_result="O"
+      c_result="패스워드가 설정된 계정이 존재하며, /etc/pam.d/system-auth 파일 내 패스워드 최소 길이가 설정되어 있으므로 양호"
+    # /etc/pam.d/system-auth 파일 내 패스워드 최소 길이 미설정 시 /etc/security/pwquality.conf 패스워드 최소 길이 설정 점검
+    elif [[ `cat /etc/security/pwquality.conf | grep -v "#" | grep minlen | wc -l` -gt 0 ]]; then
+    #statements
+      if [[ `cat /etc/security/pwquality.conf | grep -v "#" | grep minlen | awk -F'=' {'print $2'}` -ge 8 ]]; then
+        a_result="O"
+        c_result="패스워드가 설정된 계정이 존재하며, /etc/security/pwquality.conf 파일 내 패스워드 최소 길이가 8자 이상으로 설정되어 있으므로 양호"
+      else
+        a_result="X"
+        c_result="패스워드가 설정된 계정이 존재하며, /etc/security/pwquality.conf 파일 내 패스워드 최소 길이가 8자 미만으로 설정되어 있으므로 취약"
+      fi
+    elif [[ `cat /etc/security/pwquality.conf | grep -v "#" | grep minclass | wc -l` -gt 0 ]]; then
+      #statements
+      a_result="O"
+      c_result="패스워드가 설정된 계정이 존재하며, /etc/security/pwquality.conf 파일 내 패스워드 최소 길이가 설정되어 있으므로 양호"
+    elif [[ `cat /etc/login.defs | grep -v "#" | grep PASS_MIN_LEN | wc -l` -gt 0 ]]; then
+      #statements
+      if [[ `cat /etc/login.defs | grep -v "#" | grep PASS_MIN_LEN | awk {'print $2'}` -ge 8 ]]; then
+        a_result="O"
+        c_result="패스워드가 설정된 계정이 존재하며, /etc/login.defs 파일에 패스워드 최소 길이가 8자 이상으로 설정되어 있으므로 양호"
+      else
+        a_result="X"
+        c_result="패스워드가 설정된 계정이 존재하며, /etc/login.defs 파일에 패스워드 최소 길이가 8자 미만으로 설정되어 있으므로 취약"
+      fi
+    else
+      a_result="X"
+      c_result="패스워드가 설정된 계정이 존재하며, /etc/pam.d/system-auth, /etc/security/pwquality.conf, /etc/login.defs 파일 내 패스워드 최소 길이가 설정되어 있지 않으므로 취약"
+    fi
+  #Debian 계열 OS
+  else
+    pamauth=`cat /etc/pam.d/common-password | grep -v "#" | sed '/^$/d'`
+    pwminl=`cat /etc/login.defs | grep -v "#" | grep PASS_MIN_LEN`
+    if [[ -f /etc/security/pwquality.conf ]]; then
+      pwqual=`cat /etc/security/pwquality.conf | grep -v "#" | sed '/^$/d'`
+      #statements
+      if [[ `cat /etc/pam.d/common-password | grep -v "#" | grep minlen | wc -l` -gt 0 ]]; then
+        if [[ `cat /etc/pam.d/common-password | sed -rn 's/.*minlen=([[:digit:]]).*/\1/p'` -ge 8 ]]; then
+          a_result="O"
+          c_result="패스워드가 설정된 계정이 존재하며, /etc/pam.d/common-password 파일에 패스워드 최소 길이가 8자 이상으로 설정되어 있으므로 양호"
         else
-	b_result1=`cat /etc/pam.d/common-password | grep -v "#"`
-        b_result2=`cat /etc/security/pwquality.conf | grep -v "#" | grep minlen`
-        b_result3=`cat /etc/login.defs | grep -v "#" | grep PASS_MIN_LEN`
-	# /etc/pam.d/common-password 파일 내 패스워드 최소 길이 설정 여부 점검
-                if [ `cat /etc/pam.d/common-password | grep minlen | wc -l` -eq 1 ]; then
-                        if [ `cat /etc/pam.d/common-password | sed -rn 's/.*minlen=([[:digit:]]).*/\1/p'` -ge 8 ]; then
-				a_result="O"
-                                c_result="/etc/pam.d/common-password 파일에 패스워드 최소 길이가 8자 이상으로 설정되어 있으므로 양호"
-                        else
-				a_result="X"
-                                c_result="/etc/pam.d/common-password 파일에 패스워드 최소 길이가 8자 미만으로 설정되어 있으므로 취약"
-                        fi
-                # /etc/pam.d/common-password 파일 내 패스워드 최소 길이  미설정 시
-                else
-                        # /etc/security/pwquality.conf 파일 내 패스워드 최소 길이 설정  점검
-                        if [ `cat /etc/security/pwquality.conf | grep -v "#" | grep minlen | wc -l` -eq 1 ]; then
-                                if [ `cat /etc/security/pwquality.conf | grep minlen | awk -F'=' {'print $2'}` -ge 8 ]; then
-					a_result="O"
-                                        c_result="/etc/security/pwquality.conf 파일에 패스워드 최소 길이가 8자 이상으로 설정되어 있으므로 양호"
-                                else
-					a_result="X"
-                                        c_result="/etc/security/pwquality.conf 파일에 패스워드 최소 길이가 8자 미만으로 설정되어 있으므로 취약"
-                                fi
-                        else
-				# /etc/login.defs 파일 내 패스워드 최소 길이 설정 점검
-                                if [ `cat /etc/login.defs | grep -v "#" | grep PASS_MIN_LEN | wc -l` -eq 0 ]; then
-                                        a_result="X"
-                                        c_result="/etc/login.defs 파일에 패스워드 최소 길이가 설정되어 있지 않으므로 취약"
-                                else
-                                        if [ `cat /etc/login.defs | grep -v "#" | grep PASS_MIN_LEN | awk {'print $2'}` -ge 8 ]; then
-                                                a_result="O"
-                                                c_result="/etc/login.defs 파일에 패스워드 최소 길이가 8자 이상으로 설정되어 있으므로 양호"
-                                        else
-                                                a_result="X"
-                                                c_result="/etc/login.defs 파일에 패스워드 최소 길이가 8자 미만으로 설정되어 있으므로 취약"
-                                        fi
-                                fi
-                        fi
-                fi
-	fi
+          a_result="X"
+          c_result="패스워드가 설정된 계정이 존재하며, /etc/pam.d/common-password 파일에 패스워드 최소 길이가 8자 미만으로 설정되어 있으므로 취약"
+        fi
+      elif [[ `cat /etc/pam.d/common-password | grep -v "#" | grep minclass | wc -l` -gt 0 ]]; then
+        #statements
+        a_result="O"
+        c_result="패스워드가 설정된 계정이 존재하며, /etc/pam.d/common-password 파일 내 패스워드 최소 길이가 설정되어 있으므로 양호"
+      # /etc/pam.d/system-auth 파일 내 패스워드 최소 길이 미설정 시 /etc/security/pwquality.conf 패스워드 최소 길이 설정 점검
+      elif [[ `cat /etc/security/pwquality.conf | grep -v "#" | grep minlen | wc -l` -gt 0 ]]; then
+      #statements
+        if [[ `cat /etc/security/pwquality.conf | grep minlen | awk -F'=' {'print $2'}` -ge 8 ]]; then
+          a_result="O"
+          c_result="패스워드가 설정된 계정이 존재하며, /etc/security/pwquality.conf 파일 내 패스워드 최소 길이가 8자 이상으로 설정되어 있으므로 양호"
+        else
+          a_result="X"
+          c_result="패스워드가 설정된 계정이 존재하며, /etc/security/pwquality.conf 파일 내 패스워드 최소 길이가 8자 미만으로 설정되어 있으므로 취약"
+        fi
+      elif [[ `cat /etc/security/pwquality.conf | grep -v "#" | grep minclass | wc -l` -gt 0 ]]; then
+        #statements
+        a_result="O"
+        c_result="패스워드가 설정된 계정이 존재하며, /etc/security/pwquality.conf 파일 내 패스워드 최소 길이가 설정되어 있으므로 양호"
+      fi
+    elif [[ `cat /etc/login.defs | grep -v "#" | grep PASS_MIN_LEN | wc -l` -gt 0 ]]; then
+      #statements
+      if [[ `cat /etc/login.defs | grep -v "#" | grep PASS_MIN_LEN | awk {'print $2'}` -ge 8 ]]; then
+        a_result="O"
+        c_result="패스워드가 설정된 계정이 존재하며, /etc/login.defs 파일에 패스워드 최소 길이가 8자 이상으로 설정되어 있으므로 양호"
+      else
+        a_result="X"
+        c_result="패스워드가 설정된 계정이 존재하며, /etc/login.defs 파일에 패스워드 최소 길이가 8자 미만으로 설정되어 있으므로 취약"
+      fi
+    else
+      a_result="X"
+      c_result="패스워드가 설정된 계정이 존재하며, /etc/pam.d/common-password, /etc/security/pwquality.conf, /etc/login.defs 파일 내 패스워드 최소 길이가 설정되어 있지 않으므로 취약"
+    fi
+  fi
+# 패스워드가 설정된 계정이 없을 경우
 else
-	a_result="O"
-	c_result="PasswordAuthentication 설정이 no이고 PEM key를 사용하므로 양호"
+  a_result="O"
+  c_result="패스워드가 설정된 계정이 존재하지 않으며, 2048비트 SSH-2 RSA 키를 사용하는 key pair 방식이나 AWS SSM 서비스를 사용하므로 양호"
 fi
 #--END
 
-# 명령 출력 #
-
 #--START(점검 방법)
 scriptResult="1. 패스워드 최소 길이 설정 파일 점검
-$b_result1
+$pamauth
 
-2. /etc/security/pwquality.conf파일의 minlen 값 확인
-$b_result2
+2. /etc/security/pwquality.conf 파일 확인
+$pwqual
 
 3. /etc/login.defs 파일의 PASS_MIN_LEN 값 확인
-$b_result3
+$pwminl
 "
 chkStatus="$a_result"
 chkResult="[결과값]
@@ -963,14 +781,12 @@ json_change_m
 
 function U-8(){
 #--START(점검항목 설명)
+# U-08 패스워드 최대 사용기간 설정
 CODE="U-08"
 MEASURES="Hot-Fix"
 #--END
 
 #--START(점검 명령어)
-pass1=`cat /etc/ssh/sshd_config | grep ^PasswordAuthentication`
-pass2=`echo $pass1 | tr '[A-Z]' '[a-z]' | awk {'print $2'}`
-
 if [ $pass2 == "yes" ]; then
 	b_result=`cat /etc/login.defs | grep -v "#" | grep PASS_MAX_DAYS`
 
