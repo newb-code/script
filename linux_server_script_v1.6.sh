@@ -107,14 +107,20 @@ MEASURES="Hot-Fix"
 #--START(점검 명령어)
 pts=`cat /etc/securetty | grep -v "#" | grep pts | wc -l`
 
-if [ $pts -eq 0 ];then
-  a_result1="O"
-  b_result1=`cat /etc/securetty | grep -v "#" | grep pts`
-  c_result1="/etc/securetty 파일 내 pts/x 관련 설정이 존재하지 않아 telnet 접속 시 root 계정의 직접 접속이 차단되어 있으므로 양호"
+if [[ -f /etc/securetty ]]; then
+  #statements
+  if [ $pts -eq 0 ];then
+    a_result1="O"
+    b_result1=`cat /etc/securetty | grep -v "#" | grep pts`
+    c_result1="/etc/securetty 파일 내 pts/x 관련 설정이 존재하지 않아 telnet 접속 시 root 계정의 직접 접속이 차단되어 있으므로 양호"
+  else
+    a_result1="X"
+    b_result1=`cat /etc/securetty | grep -v "#" | grep pts`
+    c_result1="/etc/securetty 파일 내 pts/x 관련 설정이 존재하여 telnet 접속 시 root 계정의 직접 접속이 허용되어 있으므로 취약"
+  fi
 else
   a_result1="X"
-  b_result1=`cat /etc/securetty | grep -v "#" | grep pts`
-  c_result1="/etc/securetty 파일 내 pts/x 관련 설정이 존재하여 telnet 접속 시 root 계정의 직접 접속이 허용되어 있으므로 취약"
+  c_result1="/etc/securetty 파일이 존재하지 않아 telnet 접속 시 root 계정의 직접 접속이 허용되어 있으므로 취약"
 fi
 
 prlopt=`cat /etc/ssh/sshd_config | grep -v "#" | grep -i PermitRootLogin`
@@ -584,47 +590,30 @@ MEASURES="단기"
 
 #--START(점검 명령어)
 usewhl=`cat /etc/pam.d/su | grep -v "#" | grep pam_wheel.so | wc -l`
-nullcheck=`cat /etc/group | grep wheel | awk -F: {'print $4'} | awk -F',' {'print $2'}`
+whlchk=`cat /etc/group | grep wheel | awk -F: {'print $4'} | awk -F',' {'print $2'}`
 b_result=`cat /etc/pam.d/su | grep -v "#" | grep pam_wheel.so`
 b_result1=`cat /etc/group | grep wheel`
+b_result2=`ls -l /bin/su`
 
 if [ $usewhl -gt 0 ]; then
   if [ `cat /etc/group | grep wheel | wc -l` -eq 1 ]; then
-    if [ -z "$nullcheck" ]; then
+    a_result="O"
+    c_result="wheel 그룹에 포함된 계정들만 su 명령을 사용할 수 있도록 설정되어 있고, wheel 그룹이 존재하지 않으므로 root 계정만 su 명령을 사용할 수 있으므로 양호"
+    if [ -z "$whlchk" ]; then
       a_result="O"
-      c_result="/etc/group 파일 내 wheel 그룹에 기본 계정(ec2-user, ubuntu, admin 등) 외에 일반 계정이 존재하지 않으므로 양호"
+      c_result="wheel 그룹에 포함된 계정들만 su 명령을 사용할 수 있도록 설정되어 있고, 일반 계정이 존재하지 않아 일반 계정이 su 명령을 사용할 수 없으므로 양호"
     else
       a_result="-"
-      c_result="/etc/group 파일 내 wheel 그룹에 기본 계정(ec2-user, ubuntu, admin 등) 외에  일반 계정이 존재하므로 인터뷰 시 확인 필요"
+      c_result="/etc/group 파일 내 wheel 그룹에 기본 계정(ec2-user, ubuntu, admin 등) 외에 일반 계정이 존재하므로 인터뷰 시 확인 필요"
     fi
-  else
-    a_result="X"
-    c_result="/etc/group 파일 내 wheel 그룹이 존재하지 않으므로 취약"
   fi
+elif [[ "`f_permit /bin/su 4750`" == "OK" ]]; then
+  #statements
+  a_result="O"
+  c_result="일반 사용자가 su 명령어를 사용하지 못하도록 /bin/su 파일의 권한이 4750으로 설정되어 있으므로 양호"
 else
-  b_result2=`ls -l /bin/su | awk {'print $1"  "$3"  "$4'}`
-  if [ `cat /etc/group | grep wheel | wc -l` -eq 1 ]; then
-    if [ "`f_permit /bin/su 4750`" == "OK" ]; then
-      if [ `ls -l /bin/su | awk {'print $4'}` == "wheel" ]; then
-        if [ -z "$nullcheck" ]; then
-          a_result="O"
-          c_result="/etc/group 파일 내 wheel 그룹에 기본 계정(ec2-user, ubuntu, admin 등) 외에 일반 계정이 존재하지 않으므로 양호"
-        else
-          a_result="-"
-          c_result="/etc/group 파일 내 wheel 그룹에 기본 계정(ec2-user, ubuntu, admin 등) 외에  일반 계정이 존재하므로 인터뷰 시 확인 필요"
-        fi
-      else
-        a_result="X"
-        c_result="/bin/su 파일의 권한이 4750으로 설정되어 있으나 소유그룹이 wheel이 아니므로 취약"
-      fi
-    else
-      a_result="X"
-      c_result="/bin/su 파일의 권한이 4750이 아니므로 취약"
-    fi
-  else
-    a_result="X"
-    c_result="/etc/group 파일 내 wheel 그룹이 존재하지 않으므로 취약"
-  fi
+  a_result="X"
+  c_result="일반 사용자가 su 명령어를 사용하지 못하도록 pam_wheel.so 모듈 또는 /bin/su 파일 권한이 설정되어 있지 않으므로 취약"
 fi
 #--END
 
@@ -634,10 +623,10 @@ fi
 scriptResult="1. /etc/pam.d/su 파일내의 pam_wheel.so 모듈 사용 점검
 $b_result
 
-2. su 명령어 사용권한 점검
+2. /bin/su 파일 권한 점검
 $b_result2
 
-3. wheel 그룹 계정 확인
+3. wheel 그룹 내 계정 점검
 $b_result1
 "
 chkStatus="$a_result"
