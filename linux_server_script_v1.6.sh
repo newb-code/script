@@ -1056,82 +1056,68 @@ json_change_m
 }
 
 function U-14(){
-  #--START(점검항목 설명)
-  CODE="U-14"
-  MEASURES="단기"
-  #--END
+#--START(점검항목 설명)
+CODE="U-14"
+MEASURES="단기"
+#--END
 
-  #--START(점검 명령어)
+#--START(점검 명령어)
 
-  if [ `cat /etc/passwd | awk -F: {'print $1" "$7'} | egrep "/bin/bash|/bin/sh" | egrep -v "root|ec2-user|ubuntu|admin" | wc -l` -gt 0 ]; then
-    a_result="-"
-    b_result=`cat /etc/passwd | awk -F: {'print $1" "$7'} | egrep "/bin/bash|/bin/sh" | egrep -v "root|ec2-user|ubuntu|admin"`
-    c_result="기본 계정(root, ec2-user, ubuntu, admin)을 제외한 /bin/bash 또는 /bin/sh 권한을 갖는 일반 계정이 존재하므로 인터뷰 시 확인 필요"
-  else
-    a_result="O"
-    c_result="기본 계정(root, ec2-user, ubuntu, admin)만 /bin/bash 또는 /bin/sh 권한이 설정되어 있으므로 양호"
-  fi
-  #--END
+if [ `cat /etc/passwd | awk -F: {'print $1" "$7'} | egrep "/bin/bash|/bin/sh" | egrep -v "root|ec2-user|ubuntu|admin" | wc -l` -gt 0 ]; then
+  a_result="-"
+  b_result=`cat /etc/passwd | awk -F: {'print $1" "$7'} | egrep "/bin/bash|/bin/sh" | egrep -v "root|ec2-user|ubuntu|admin"`
+  c_result="기본 계정(root, ec2-user, ubuntu, admin)을 제외한 /bin/bash 또는 /bin/sh 권한을 갖는 일반 계정이 존재하므로 인터뷰 시 확인 필요"
+else
+  a_result="O"
+  c_result="기본 계정(root, ec2-user, ubuntu, admin)만 /bin/bash 또는 /bin/sh 권한이 설정되어 있으므로 양호"
+fi
+#--END
 
-  # 명령 출력 #
+# 명령 출력 #
 
-  #--START(점검 방법)
-  scriptResult="1. 기본 계정을 제외한 /bin/bash 또는 /bin/sh 쉘 권한이 부여된 사용자 계정 점검
-  $b_result
+#--START(점검 방법)
+scriptResult="1. 기본 계정을 제외한 /bin/bash 또는 /bin/sh 쉘 권한이 부여된 사용자 계정 점검
+$b_result
 
-  "
-  chkStatus="$a_result"
-  chkResult="[결과값]
-  $c_result
-  "
-  #--END
+"
+chkStatus="$a_result"
+chkResult="[결과값]
+$c_result
+"
+#--END
 
-  #--START(JSON 형식 출력)
-  json_change_m
+#--START(JSON 형식 출력)
+json_change_m
 }
 
 function U-15(){
-  #--START(점검항목 설명)
-  CODE="U-15"
-  MEASURES="Hot-Fix"
-  #--END
+#--START(점검항목 설명)
+CODE="U-15"
+MEASURES="Hot-Fix"
+#--END
 
-  #--START(점검 명령어)
+#--START(점검 명령어)
 
-  if [ `cat /etc/ssh/sshd_config | grep -v "#" | grep ClientAliveInterval | wc -l` -gt 0 ]; then
-    palive=`cat /etc/ssh/sshd_config | grep -v "#" | grep ClientAliveInterval | awk {'print $2'}`
-    b_result1=`cat /etc/ssh/sshd_config | grep -v "#" | grep ClientAliveInterval`
-    if [ `cat /etc/ssh/sshd_config | grep -v "#" | grep ClientAliveInterval | awk {'print $2'}` -le 600 ]; then
-      a_result1="O"
-      c_result1="세션 타임아웃이 $palive초 이하로 설정되어 있으므로 양호"
-    else
-      a_result1="X"
-      c_result1="세션 타임아웃이 $palive초로 초과 설정되어 있으므로 취약"
-    fi
-  else
-    a_result1="X"
-    c_result1="세션 타임아웃이 설정되어 있지 않으므로 취약"
-  fi
+if [ `cat /etc/ssh/sshd_config | grep -v "#" | grep ClientAliveInterval | wc -l` -gt 0 ]; then
+  b_result1=`cat /etc/ssh/sshd_config | grep -v "#" | grep ClientAliveInterval`
+  a_result1="O"
+else
+  a_result1="X"
+fi
 
-  if [ `cat /etc/profile | grep TMOUT | wc -l` -gt 0 ]; then
-    ptmout=`cat /etc/profile | grep TMOUT | awk -F'=' {'print $2'}`
-    b_result2=`cat /etc/profile | grep TMOUT`
-    if [ `cat /etc/profile | grep TMOUT | awk -F'=' {'print $2'}` -le 600 ]; then
-      a_result2="O"
-      c_result2="세션 타임아웃이 $ptmout초 이하로 설정되어 있으므로 양호"
-    elif [ `cat /etc/profile | grep TMOUT | awk -F'=' {'print $2'}` -gt 600 ]; then
-      a_result2="X"
-      c_result2="세션 타임아웃이 $ptmout초로 초과 설정되어 있으므로 취약"
-    fi
-  else
-    a_result2="X"
-    c_result2="세션 타임아웃이 설정되어 있지 않으므로 취약"
-  fi
+if [ `cat /etc/profile | grep -i TMOUT | wc -l` -gt 0 ]; then
+  b_result2=`cat /etc/profile | grep -i TMOUT`
+  a_result2="O"
+else
+  a_result2="X"
+fi
 
-  if [ $a_result1 == "O" -o $a_result2 == "O" ]; then
-    a_result="O"
-  else
-	a_result="X"
+if [ $a_result1 == "O" -o $a_result2 == "O" ]; then
+  a_result="O"
+  c_result="세션 타임아웃이 설정되어 있으므로 양호"
+else
+  a_result="X"
+  c_result="세션 타임아웃이 설정되어 있지 않으므로 취약"
 fi
 #--END
 
@@ -1145,8 +1131,7 @@ $b_result2
 "
 chkStatus="$a_result"
 chkResult="[결과값]
-$c_result1
-$c_result2
+$c_result
 "
 #--END
 
